@@ -10,12 +10,15 @@ public:
 
     Matrix forward(const Matrix& input);
     double train_sample(const Matrix& input, int label, double learning_rate);
+    double evaluate_accuracy(const std::vector<Matrix>& images,
+                              const std::vector<int>& labels);
 
     static Matrix relu(const Matrix& z);
     static Matrix relu_derivative(const Matrix& z);
     static Matrix softmax(const Matrix& z);
     static double cross_entropy_loss(const Matrix& probabilities, int label);
     static Matrix one_hot(int label, std::size_t num_classes);
+    static int predicted_class(const Matrix& probabilities);
 
 private:
     std::size_t input_size_;

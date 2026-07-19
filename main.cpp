@@ -6,6 +6,10 @@
 #include <string>
 #include <stdexcept>
 #include <cmath>
+#include <vector>
+#include <numeric>
+#include <algorithm>
+#include <random>
 
 namespace {
 
@@ -284,6 +288,34 @@ void test_train_sample_reduces_loss() {
         "train_sample(): loss уменьшается после многократного обучения на одном примере");
 }
 
+void test_evaluate_accuracy() {
+    NeuralNetwork network(4, 6, 2);
+
+    Matrix sample_a(1, 4);
+    sample_a.at(0, 0) = 1.0; sample_a.at(0, 1) = 0.0;
+    sample_a.at(0, 2) = 0.0; sample_a.at(0, 3) = 0.0;
+
+    Matrix sample_b(1, 4);
+    sample_b.at(0, 0) = 0.0; sample_b.at(0, 1) = 0.0;
+    sample_b.at(0, 2) = 0.0; sample_b.at(0, 3) = 1.0;
+
+    std::vector<Matrix> images = {sample_a, sample_b};
+    std::vector<int> labels = {0, 1};
+
+    for (int i = 0; i < 300; ++i) {
+        network.train_sample(sample_a, 0, 0.2);
+        network.train_sample(sample_b, 1, 0.2);
+    }
+
+    double accuracy = network.evaluate_accuracy(images, labels);
+    expect_true(accuracy == 100.0,
+        "evaluate_accuracy(): 100% после обучения на разделимых образцах");
+
+    std::vector<int> mismatched_labels = {0};
+    expect_throws([&]() { network.evaluate_accuracy(images, mismatched_labels); },
+        "evaluate_accuracy(): несовпадение размеров images/labels бросает исключение");
+}
+
 void run_matrix_tests() {
     std::cout << "=== Тесты математического движка Matrix ===\n\n";
 
@@ -300,6 +332,7 @@ void run_matrix_tests() {
     test_one_hot();
     test_cross_entropy_loss();
     test_train_sample_reduces_loss();
+    test_evaluate_accuracy();
 
     std::cout << "\n=== Итог: " << tests_passed << " / " << tests_run
               << " тестов пройдено ===\n";
@@ -344,63 +377,98 @@ void run_forward_pass_demo(const Matrix& image, int label) {
     std::cout << "Предсказанный класс: " << predicted << "\n";
 }
 
-int predict_class(const Matrix& probabilities) {
-    int predicted = 0;
-    double max_prob = probabilities.at(0, 0);
-    for (std::size_t i = 1; i < probabilities.cols(); ++i) {
-        if (probabilities.at(0, i) > max_prob) {
-            max_prob = probabilities.at(0, i);
-            predicted = static_cast<int>(i);
-        }
-    }
-    return predicted;
-}
-
 void run_training_demo(const MnistDataset& dataset) {
     std::cout << "\n=== Обучение сети (backpropagation + SGD) ===\n\n";
 
-    NeuralNetwork network(784, 128, 10);
+    std::vector<Matrix> flattened_images;
+    flattened_images.reserve(dataset.images.size());
+    for (const Matrix& image : dataset.images) {
+        flattened_images.push_back(flatten_image(image));
+    }
 
-    std::size_t num_steps = std::min<std::size_t>(5000, dataset.images.size());
-    double learning_rate = 0.05;
-    double running_loss = 0.0;
-    int running_correct = 0;
+    std::size_t total = flattened_images.size();
+    std::size_t train_size = static_cast<std::size_t>(total * 0.8);
 
-    for (std::size_t step = 0; step < num_steps; ++step) {
-        std::size_t idx = step % dataset.images.size();
-        Matrix input = flatten_image(dataset.images[idx]);
-        int label = dataset.labels[idx];
+    std::vector<std::size_t> indices(total);
+    std::iota(indices.begin(), indices.end(), 0);
 
-        double loss = network.train_sample(input, label, learning_rate);
-        running_loss += loss;
+    std::mt19937 shuffle_rng(42);
+    std::shuffle(indices.begin(), indices.end(), shuffle_rng);
 
-        Matrix probabilities = network.forward(input);
-        if (predict_class(probabilities) == label) {
-            ++running_correct;
-        }
+    std::vector<Matrix> train_images;
+    std::vector<int> train_labels;
+    std::vector<Matrix> test_images;
+    std::vector<int> test_labels;
 
-        if ((step + 1) % 200 == 0) {
-            double avg_loss = running_loss / 200.0;
-            double accuracy = static_cast<double>(running_correct) / 200.0 * 100.0;
-            std::cout << "Шаг " << (step + 1) << " / " << num_steps
-                      << " | Loss: " << avg_loss
-                      << " | Accuracy (последние 200): " << accuracy << "%\n";
-            running_loss = 0.0;
-            running_correct = 0;
+    train_images.reserve(train_size);
+    train_labels.reserve(train_size);
+    test_images.reserve(total - train_size);
+    test_labels.reserve(total - train_size);
+
+    for (std::size_t i = 0; i < total; ++i) {
+        std::size_t idx = indices[i];
+        if (i < train_size) {
+            train_images.push_back(flattened_images[idx]);
+            train_labels.push_back(dataset.labels[idx]);
+        } else {
+            test_images.push_back(flattened_images[idx]);
+            test_labels.push_back(dataset.labels[idx]);
         }
     }
 
-    std::cout << "\n=== Обучение завершено ===\n\n";
+    std::cout << "Обучающая выборка: " << train_images.size() << " образцов\n";
+    std::cout << "Тестовая выборка: " << test_images.size() << " образцов\n\n";
 
-    const Matrix& first_image = dataset.images.front();
-    int first_label = dataset.labels.front();
-    Matrix final_probabilities = network.forward(flatten_image(first_image));
+    NeuralNetwork network(784, 128, 10);
 
-    std::cout << "Проверка на первом изображении (лейбл " << first_label << "):\n";
+    int num_epochs = 3;
+    double learning_rate = 0.05;
+
+    std::vector<std::size_t> train_order(train_images.size());
+    std::iota(train_order.begin(), train_order.end(), 0);
+
+    for (int epoch = 1; epoch <= num_epochs; ++epoch) {
+        std::shuffle(train_order.begin(), train_order.end(), shuffle_rng);
+
+        double running_loss = 0.0;
+        std::size_t step_in_window = 0;
+
+        for (std::size_t step = 0; step < train_order.size(); ++step) {
+            std::size_t idx = train_order[step];
+            double loss = network.train_sample(train_images[idx], train_labels[idx], learning_rate);
+            running_loss += loss;
+            ++step_in_window;
+
+            if ((step + 1) % 200 == 0) {
+                double avg_loss = running_loss / static_cast<double>(step_in_window);
+                std::cout << "Эпоха " << epoch << " | Шаг " << (step + 1) << " / "
+                          << train_order.size() << " | Loss: " << avg_loss << "\n";
+                running_loss = 0.0;
+                step_in_window = 0;
+            }
+        }
+
+        double train_accuracy = network.evaluate_accuracy(train_images, train_labels);
+        double test_accuracy = network.evaluate_accuracy(test_images, test_labels);
+
+        std::cout << "\n--- Конец эпохи " << epoch << " ---\n";
+        std::cout << "Точность на обучающей выборке: " << train_accuracy << "%\n";
+        std::cout << "Точность на тестовой выборке: " << test_accuracy << "%\n\n";
+    }
+
+    std::cout << "=== Обучение завершено ===\n\n";
+
+    const Matrix& first_test_image = test_images.front();
+    int first_test_label = test_labels.front();
+    Matrix final_probabilities = network.forward(first_test_image);
+
+    std::cout << "Проверка на первом изображении тестовой выборки (лейбл "
+              << first_test_label << "):\n";
     for (std::size_t i = 0; i < final_probabilities.cols(); ++i) {
         std::cout << "  " << i << ": " << final_probabilities.at(0, i) << "\n";
     }
-    std::cout << "Предсказанный класс: " << predict_class(final_probabilities) << "\n";
+    std::cout << "Предсказанный класс: "
+              << NeuralNetwork::predicted_class(final_probabilities) << "\n";
 }
 
 void run_mnist_demo() {

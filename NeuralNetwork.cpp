@@ -136,3 +136,36 @@ double NeuralNetwork::train_sample(const Matrix& input, int label, double learni
     backward(label, learning_rate);
     return loss;
 }
+
+int NeuralNetwork::predicted_class(const Matrix& probabilities) {
+    int predicted = 0;
+    double max_prob = probabilities.at(0, 0);
+    for (std::size_t i = 1; i < probabilities.cols(); ++i) {
+        if (probabilities.at(0, i) > max_prob) {
+            max_prob = probabilities.at(0, i);
+            predicted = static_cast<int>(i);
+        }
+    }
+    return predicted;
+}
+
+double NeuralNetwork::evaluate_accuracy(const std::vector<Matrix>& images,
+                                         const std::vector<int>& labels) {
+    if (images.size() != labels.size()) {
+        throw std::invalid_argument(
+            "NeuralNetwork::evaluate_accuracy: количество изображений и лейблов должно совпадать");
+    }
+    if (images.empty()) {
+        return 0.0;
+    }
+
+    std::size_t correct = 0;
+    for (std::size_t i = 0; i < images.size(); ++i) {
+        Matrix probabilities = forward(images[i]);
+        if (predicted_class(probabilities) == labels[i]) {
+            ++correct;
+        }
+    }
+
+    return static_cast<double>(correct) / static_cast<double>(images.size()) * 100.0;
+}
