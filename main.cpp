@@ -1,15 +1,5 @@
-/**
- * main.cpp
- *
- * Простые юнит-тесты для класса Matrix — базового математического
- * движка будущей нейросети для распознавания MNIST.
- *
- * Тесты не используют сторонних фреймворков: каждая проверка — это
- * вызов простой функции expect_true / expect_matrix_equal, которая
- * печатает результат (PASS/FAIL) и ведёт общий счётчик.
- */
-
 #include "Matrix.h"
+#include "MnistLoader.h"
 
 #include <iostream>
 #include <string>
@@ -20,7 +10,6 @@ namespace {
 int tests_run = 0;
 int tests_passed = 0;
 
-/// Проверяет булево условие и печатает результат теста.
 void expect_true(bool condition, const std::string& test_name) {
     ++tests_run;
     if (condition) {
@@ -31,14 +20,11 @@ void expect_true(bool condition, const std::string& test_name) {
     }
 }
 
-/// Проверяет, что две матрицы совпадают с точностью eps.
 void expect_matrix_equal(const Matrix& actual, const Matrix& expected,
                           const std::string& test_name, double eps = 1e-9) {
     expect_true(actual.equals(expected, eps), test_name);
 }
 
-/// Проверяет, что вызов f() бросает std::exception (например, при
-/// несовместимых размерах матриц).
 template <typename Func>
 void expect_throws(Func f, const std::string& test_name) {
     ++tests_run;
@@ -50,10 +36,6 @@ void expect_throws(Func f, const std::string& test_name) {
         std::cout << "[PASS] " << test_name << "\n";
     }
 }
-
-// ------------------------------------------------------------------
-// Тесты
-// ------------------------------------------------------------------
 
 void test_construction_and_default_values() {
     Matrix m(2, 3);
@@ -99,24 +81,21 @@ void test_fill_and_randomize() {
             if (m.at(i, j) != 7.5) all_correct = false;
     expect_true(all_correct, "fill(): все элементы установлены в заданное значение");
 
-    // randomize с фиксированным зерном должен быть воспроизводим.
     Matrix r1(4, 4);
     Matrix r2(4, 4);
-    r1.randomize(-1.0, 1.0, /*seed=*/42, /*use_seed=*/true);
-    r2.randomize(-1.0, 1.0, /*seed=*/42, /*use_seed=*/true);
+    r1.randomize(-1.0, 1.0, 42, true);
+    r2.randomize(-1.0, 1.0, 42, true);
     expect_matrix_equal(r1, r2,
         "randomize(): одинаковое зерно даёт одинаковый результат");
 
-    // Все значения должны лежать в заданном диапазоне.
     bool in_range = true;
     for (std::size_t i = 0; i < r1.rows(); ++i)
         for (std::size_t j = 0; j < r1.cols(); ++j)
             if (r1.at(i, j) < -1.0 || r1.at(i, j) > 1.0) in_range = false;
     expect_true(in_range, "randomize(): значения находятся в диапазоне [-1, 1]");
 
-    // Разные зёрна должны (почти наверняка) давать разный результат.
     Matrix r3(4, 4);
-    r3.randomize(-1.0, 1.0, /*seed=*/123, /*use_seed=*/true);
+    r3.randomize(-1.0, 1.0, 123, true);
     expect_true(!r1.equals(r3),
         "randomize(): разные зёрна дают разные матрицы");
 }
@@ -183,9 +162,6 @@ void test_scalar_multiplication() {
 }
 
 void test_dot_product() {
-    // [1 2 3]   [ 7  8]
-    // [4 5 6] * [ 9 10]
-    //           [11 12]
     Matrix a(2, 3);
     a.at(0, 0) = 1; a.at(0, 1) = 2; a.at(0, 2) = 3;
     a.at(1, 0) = 4; a.at(1, 1) = 5; a.at(1, 2) = 6;
@@ -195,9 +171,6 @@ void test_dot_product() {
     b.at(1, 0) = 9;  b.at(1, 1) = 10;
     b.at(2, 0) = 11; b.at(2, 1) = 12;
 
-    // Ожидаемый результат вычислен вручную:
-    // [1*7+2*9+3*11, 1*8+2*10+3*12] = [58, 64]
-    // [4*7+5*9+6*11, 4*8+5*10+6*12] = [139, 154]
     Matrix expected(2, 2);
     expected.at(0, 0) = 58;  expected.at(0, 1) = 64;
     expected.at(1, 0) = 139; expected.at(1, 1) = 154;
@@ -206,13 +179,11 @@ void test_dot_product() {
         "dot(): корректное матричное умножение (прямоугольные матрицы)");
     expect_matrix_equal(a * b, expected, "operator*(Matrix): соответствует dot()");
 
-    // Умножение на единичную матрицу не должно менять значения.
     Matrix identity(3, 3);
     identity.at(0, 0) = 1; identity.at(1, 1) = 1; identity.at(2, 2) = 1;
     expect_matrix_equal(a.dot(identity), a,
         "dot(): умножение на единичную матрицу не изменяет исходную");
 
-    // Несовместимые размеры должны бросать исключение.
     Matrix incompatible(2, 2);
     expect_throws([&]() { a.dot(incompatible); },
                    "dot(): несовместимые размеры бросают исключение");
@@ -234,9 +205,7 @@ void test_transpose() {
     expect_matrix_equal(result, expected, "transpose(): значения переставлены верно");
 }
 
-} // namespace
-
-int main() {
+void run_matrix_tests() {
     std::cout << "=== Тесты математического движка Matrix ===\n\n";
 
     test_construction_and_default_values();
@@ -250,12 +219,38 @@ int main() {
 
     std::cout << "\n=== Итог: " << tests_passed << " / " << tests_run
               << " тестов пройдено ===\n";
+}
 
-    // Небольшая демонстрация вывода матрицы (пригодится для отладки весов).
-    std::cout << "\nПример матрицы весов 3x3, инициализированной случайно:\n";
-    Matrix weights(3, 3);
-    weights.randomize(-0.5, 0.5, 42, true);
-    weights.print();
+void run_mnist_demo() {
+    const std::string images_path = "data/train-images-idx3-ubyte";
+    const std::string labels_path = "data/train-labels-idx1-ubyte";
 
+    std::cout << "\n=== Загрузка датасета MNIST ===\n\n";
+
+    try {
+        MnistDataset dataset = load_mnist_dataset(images_path, labels_path);
+
+        std::cout << "Загружено изображений: " << dataset.images.size() << "\n";
+        std::cout << "Загружено лейблов: " << dataset.labels.size() << "\n\n";
+
+        const Matrix& first_image = dataset.images.front();
+        int first_label = dataset.labels.front();
+
+        std::cout << "Размер первого изображения: " << first_image.rows()
+                  << "x" << first_image.cols() << "\n\n";
+
+        print_mnist_image(first_image, first_label);
+    } catch (const std::exception& e) {
+        std::cout << "Не удалось загрузить датасет: " << e.what() << "\n";
+        std::cout << "Убедитесь, что файлы " << images_path << " и "
+                  << labels_path << " существуют.\n";
+    }
+}
+
+}
+
+int main() {
+    run_matrix_tests();
+    run_mnist_demo();
     return (tests_passed == tests_run) ? 0 : 1;
 }
