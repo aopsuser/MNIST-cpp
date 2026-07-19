@@ -15,7 +15,7 @@ This project was created to deeply understand the underlying math behind Deep Le
 
 1. Clone the repository:
    ```bash
-   git clone [https://github.com/ТВОЙ_НИК/mnist-cpp-from-scratch.git](https://github.com/ТВОЙ_НИК/mnist-cpp-from-scratch.git)
+   git clone https://github.com/aopsuser/MNIST-cpp
 Download the MNIST dataset files (train-images-idx3-ubyte, train-labels-idx1-ubyte) and place them in the data/ folder.
 
 Compile the project using G++ (C++17 required):
