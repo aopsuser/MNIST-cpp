@@ -1,9 +1,11 @@
 #include "Matrix.h"
 #include "MnistLoader.h"
+#include "NeuralNetwork.h"
 
 #include <iostream>
 #include <string>
 #include <stdexcept>
+#include <cmath>
 
 namespace {
 
@@ -205,6 +207,43 @@ void test_transpose() {
     expect_matrix_equal(result, expected, "transpose(): значения переставлены верно");
 }
 
+void test_relu() {
+    Matrix z(1, 4);
+    z.at(0, 0) = -2.0; z.at(0, 1) = 0.0; z.at(0, 2) = 3.5; z.at(0, 3) = -0.001;
+
+    Matrix expected(1, 4);
+    expected.at(0, 0) = 0.0; expected.at(0, 1) = 0.0;
+    expected.at(0, 2) = 3.5; expected.at(0, 3) = 0.0;
+
+    expect_matrix_equal(NeuralNetwork::relu(z), expected,
+        "relu(): отрицательные значения обнуляются, положительные не меняются");
+}
+
+void test_softmax() {
+    Matrix z(1, 3);
+    z.at(0, 0) = 1.0; z.at(0, 1) = 1.0; z.at(0, 2) = 1.0;
+
+    Matrix result = NeuralNetwork::softmax(z);
+
+    double sum = result.at(0, 0) + result.at(0, 1) + result.at(0, 2);
+    expect_true(std::abs(sum - 1.0) < 1e-9,
+        "softmax(): сумма вероятностей равна 1");
+
+    Matrix expected_uniform(1, 3);
+    expected_uniform.fill(1.0 / 3.0);
+    expect_matrix_equal(result, expected_uniform,
+        "softmax(): равные входы дают равные вероятности");
+
+    Matrix z2(1, 3);
+    z2.at(0, 0) = 1000.0; z2.at(0, 1) = 1000.0; z2.at(0, 2) = 1000.0;
+    Matrix result2 = NeuralNetwork::softmax(z2);
+    bool no_nan = true;
+    for (std::size_t i = 0; i < result2.cols(); ++i) {
+        if (std::isnan(result2.at(0, i))) no_nan = false;
+    }
+    expect_true(no_nan, "softmax(): большие значения не дают NaN (стабильность)");
+}
+
 void run_matrix_tests() {
     std::cout << "=== Тесты математического движка Matrix ===\n\n";
 
@@ -216,9 +255,50 @@ void run_matrix_tests() {
     test_scalar_multiplication();
     test_dot_product();
     test_transpose();
+    test_relu();
+    test_softmax();
 
     std::cout << "\n=== Итог: " << tests_passed << " / " << tests_run
               << " тестов пройдено ===\n";
+}
+
+Matrix flatten_image(const Matrix& image) {
+    Matrix flat(1, image.rows() * image.cols());
+    for (std::size_t r = 0; r < image.rows(); ++r) {
+        for (std::size_t c = 0; c < image.cols(); ++c) {
+            flat.at(0, r * image.cols() + c) = image.at(r, c);
+        }
+    }
+    return flat;
+}
+
+void run_forward_pass_demo(const Matrix& image, int label) {
+    std::cout << "\n=== Прямой проход (forward pass) со случайными весами ===\n\n";
+
+    NeuralNetwork network(784, 128, 10);
+
+    Matrix input = flatten_image(image);
+    Matrix output = network.forward(input);
+
+    std::cout << "Истинный лейбл: " << label << "\n\n";
+    std::cout << "Вероятности по классам:\n";
+
+    double sum = 0.0;
+    int predicted = 0;
+    double max_prob = output.at(0, 0);
+
+    for (std::size_t i = 0; i < output.cols(); ++i) {
+        double p = output.at(0, i);
+        sum += p;
+        if (p > max_prob) {
+            max_prob = p;
+            predicted = static_cast<int>(i);
+        }
+        std::cout << "  " << i << ": " << p << "\n";
+    }
+
+    std::cout << "\nСумма вероятностей: " << sum << " (должна быть ~1.0)\n";
+    std::cout << "Предсказанный класс: " << predicted << "\n";
 }
 
 void run_mnist_demo() {
@@ -240,6 +320,8 @@ void run_mnist_demo() {
                   << "x" << first_image.cols() << "\n\n";
 
         print_mnist_image(first_image, first_label);
+
+        run_forward_pass_demo(first_image, first_label);
     } catch (const std::exception& e) {
         std::cout << "Не удалось загрузить датасет: " << e.what() << "\n";
         std::cout << "Убедитесь, что файлы " << images_path << " и "
