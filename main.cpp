@@ -244,6 +244,46 @@ void test_softmax() {
     expect_true(no_nan, "softmax(): большие значения не дают NaN (стабильность)");
 }
 
+void test_one_hot() {
+    Matrix expected(1, 5);
+    expected.fill(0.0);
+    expected.at(0, 2) = 1.0;
+
+    expect_matrix_equal(NeuralNetwork::one_hot(2, 5), expected,
+        "one_hot(): единица стоит в позиции лейбла, остальное нули");
+}
+
+void test_cross_entropy_loss() {
+    Matrix probs(1, 3);
+    probs.at(0, 0) = 0.7; probs.at(0, 1) = 0.2; probs.at(0, 2) = 0.1;
+
+    double loss = NeuralNetwork::cross_entropy_loss(probs, 0);
+    double expected = -std::log(0.7);
+    expect_true(std::abs(loss - expected) < 1e-9,
+        "cross_entropy_loss(): значение совпадает с -log(p_label)");
+
+    double high_loss = NeuralNetwork::cross_entropy_loss(probs, 2);
+    expect_true(high_loss > loss,
+        "cross_entropy_loss(): низкая вероятность правильного класса даёт больший loss");
+}
+
+void test_train_sample_reduces_loss() {
+    NeuralNetwork network(10, 8, 3);
+
+    Matrix input(1, 10);
+    input.randomize(0.0, 1.0, 7, true);
+    int label = 1;
+
+    double first_loss = network.train_sample(input, label, 0.1);
+    double last_loss = first_loss;
+    for (int i = 0; i < 50; ++i) {
+        last_loss = network.train_sample(input, label, 0.1);
+    }
+
+    expect_true(last_loss < first_loss,
+        "train_sample(): loss уменьшается после многократного обучения на одном примере");
+}
+
 void run_matrix_tests() {
     std::cout << "=== Тесты математического движка Matrix ===\n\n";
 
@@ -257,6 +297,9 @@ void run_matrix_tests() {
     test_transpose();
     test_relu();
     test_softmax();
+    test_one_hot();
+    test_cross_entropy_loss();
+    test_train_sample_reduces_loss();
 
     std::cout << "\n=== Итог: " << tests_passed << " / " << tests_run
               << " тестов пройдено ===\n";
@@ -301,6 +344,65 @@ void run_forward_pass_demo(const Matrix& image, int label) {
     std::cout << "Предсказанный класс: " << predicted << "\n";
 }
 
+int predict_class(const Matrix& probabilities) {
+    int predicted = 0;
+    double max_prob = probabilities.at(0, 0);
+    for (std::size_t i = 1; i < probabilities.cols(); ++i) {
+        if (probabilities.at(0, i) > max_prob) {
+            max_prob = probabilities.at(0, i);
+            predicted = static_cast<int>(i);
+        }
+    }
+    return predicted;
+}
+
+void run_training_demo(const MnistDataset& dataset) {
+    std::cout << "\n=== Обучение сети (backpropagation + SGD) ===\n\n";
+
+    NeuralNetwork network(784, 128, 10);
+
+    std::size_t num_steps = std::min<std::size_t>(5000, dataset.images.size());
+    double learning_rate = 0.05;
+    double running_loss = 0.0;
+    int running_correct = 0;
+
+    for (std::size_t step = 0; step < num_steps; ++step) {
+        std::size_t idx = step % dataset.images.size();
+        Matrix input = flatten_image(dataset.images[idx]);
+        int label = dataset.labels[idx];
+
+        double loss = network.train_sample(input, label, learning_rate);
+        running_loss += loss;
+
+        Matrix probabilities = network.forward(input);
+        if (predict_class(probabilities) == label) {
+            ++running_correct;
+        }
+
+        if ((step + 1) % 200 == 0) {
+            double avg_loss = running_loss / 200.0;
+            double accuracy = static_cast<double>(running_correct) / 200.0 * 100.0;
+            std::cout << "Шаг " << (step + 1) << " / " << num_steps
+                      << " | Loss: " << avg_loss
+                      << " | Accuracy (последние 200): " << accuracy << "%\n";
+            running_loss = 0.0;
+            running_correct = 0;
+        }
+    }
+
+    std::cout << "\n=== Обучение завершено ===\n\n";
+
+    const Matrix& first_image = dataset.images.front();
+    int first_label = dataset.labels.front();
+    Matrix final_probabilities = network.forward(flatten_image(first_image));
+
+    std::cout << "Проверка на первом изображении (лейбл " << first_label << "):\n";
+    for (std::size_t i = 0; i < final_probabilities.cols(); ++i) {
+        std::cout << "  " << i << ": " << final_probabilities.at(0, i) << "\n";
+    }
+    std::cout << "Предсказанный класс: " << predict_class(final_probabilities) << "\n";
+}
+
 void run_mnist_demo() {
     const std::string images_path = "data/train-images-idx3-ubyte";
     const std::string labels_path = "data/train-labels-idx1-ubyte";
@@ -322,6 +424,8 @@ void run_mnist_demo() {
         print_mnist_image(first_image, first_label);
 
         run_forward_pass_demo(first_image, first_label);
+
+        run_training_demo(dataset);
     } catch (const std::exception& e) {
         std::cout << "Не удалось загрузить датасет: " << e.what() << "\n";
         std::cout << "Убедитесь, что файлы " << images_path << " и "
