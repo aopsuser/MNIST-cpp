@@ -29,6 +29,7 @@ jobs:
       - name: Запустить Zombie Branch Hunter
         uses: ./zombie-branch-hunter
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
           inactive-days-threshold: '30'
           dry-run: ${{ github.event.inputs.dry_run || 'false' }}
