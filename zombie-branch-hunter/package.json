@@ -1,0 +1,25 @@
+{
+  "name": "zombie-branch-hunter",
+  "version": "1.0.0",
+  "description": "GitHub Action, который находит заброшенные ветки и стейл PR и оставляет персонализированные AI-комментарии вместо шаблонных",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/index.js",
+    "test:local": "node src/index.js --local"
+  },
+  "dependencies": {
+    "@octokit/rest": "^21.0.2",
+    "@google/generative-ai": "^0.21.0",
+    "dotenv": "^16.4.5"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "MIT",
+  "author": "",
+  "repository": {
+    "type": "git",
+    "url": ""
+  }
+}

@@ -1,0 +1,98 @@
+name: 'Zombie Branch Hunter'
+description: >-
+  Находит заброшенные ветки и стейл PR в репозитории и оставляет
+  персонализированные AI-комментарии (Gemini API) вместо шаблонных.
+author: 'zombie-branch-hunter'
+
+branding:
+  icon: 'git-branch'
+  color: 'purple'
+
+inputs:
+  github-token:
+    description: >-
+      Токен для доступа к GitHub API. Почти всегда достаточно встроенного
+      ${{ github.token }} / ${{ secrets.GITHUB_TOKEN }} — создавать отдельный
+      Personal Access Token не нужно.
+    required: true
+    default: ${{ github.token }}
+
+  gemini-api-key:
+    description: >-
+      API-ключ Google Gemini. Бесплатный ключ можно получить на
+      https://aistudio.google.com/app/apikey — храни его в GitHub Secrets,
+      никогда не пиши прямо в workflow-файл.
+    required: true
+
+  gemini-model:
+    description: >-
+      Имя модели Gemini (например, gemini-2.0-flash или gemini-1.5-flash).
+      Если не задано, Action сам подберёт доступную лёгкую модель из
+      бесплатного тира.
+    required: false
+    default: ''
+
+  inactive-days-threshold:
+    description: >-
+      Через сколько дней без активности ветка/PR считается "заброшенной".
+    required: false
+    default: '30'
+
+  dedup-window-days:
+    description: >-
+      Не постить повторный комментарий в тот же PR чаще, чем раз в N дней.
+    required: false
+    default: '7'
+
+  gemini-request-delay-ms:
+    description: >-
+      Пауза между вызовами Gemini API в миллисекундах — защита от лимита
+      запросов в минуту у бесплатного тира.
+    required: false
+    default: '4500'
+
+  gemini-max-retries:
+    description: >-
+      Сколько раз повторять запрос к Gemini при ошибке rate limit (429),
+      с экспоненциальной задержкой между попытками.
+    required: false
+    default: '5'
+
+  dry-run:
+    description: >-
+      Если true, Action только печатает в лог, что бы он запостил, но
+      ничего реально не публикует в GitHub. Полезно для первого теста.
+    required: false
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Установить Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Установить зависимости
+      shell: bash
+      # ${{ github.action_path }} — папка, куда GitHub клонирует этот Action
+      # (не репозиторий пользователя), поэтому npm ci ставит зависимости
+      # именно самого Action, а не проекта, в который он встроен.
+      run: |
+        cd "${{ github.action_path }}"
+        npm ci --omit=dev
+
+    - name: Запустить Zombie Branch Hunter
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
+        GEMINI_MODEL: ${{ inputs.gemini-model }}
+        INACTIVE_DAYS_THRESHOLD: ${{ inputs.inactive-days-threshold }}
+        DEDUP_WINDOW_DAYS: ${{ inputs.dedup-window-days }}
+        GEMINI_REQUEST_DELAY_MS: ${{ inputs.gemini-request-delay-ms }}
+        GEMINI_MAX_RETRIES: ${{ inputs.gemini-max-retries }}
+        DRY_RUN: ${{ inputs.dry-run }}
+      run: node src/index.js
