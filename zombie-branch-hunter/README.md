@@ -1,4 +1,4 @@
-# 🧟 Zombie Branch Hunter
+# Zombie Branch Hunter
 
 GitHub Action, который раз в неделю сам находит заброшенные ветки и
 "зависшие" pull request'ы в твоём репозитории — и вместо казённого "This PR
@@ -19,7 +19,7 @@ has been inactive for 30 days" оставляет живое, человечес
 
 Стандартные stale-боты решают это шаблонным текстом вроде:
 
-> ⚠️ This pull request has been automatically marked as stale because it has
+> This pull request has been automatically marked as stale because it has
 > not had recent activity. It will be closed if no further activity occurs.
 
 Такое сообщение раздражает и его хочется проигнорировать — оно очевидно
@@ -68,7 +68,7 @@ has been inactive for 30 days" оставляет живое, человечес
 1. Зайди на [aistudio.google.com](https://aistudio.google.com/app/apikey)
 2. Войди через Google-аккаунт
 3. Нажми **Get API key** → **Create API key**
-4. Скопируй ключ (выглядит примерно как `AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`)
+4. Скопируй ключ 
 
 Карту привязывать не нужно — бесплатный тир даёт достаточный дневной лимит
 запросов для еженедельного скана ~5-15 веток.
