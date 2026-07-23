@@ -12,7 +12,7 @@ inputs:
   github-token:
     description: >-
       Токен для доступа к GitHub API. Почти всегда достаточно встроенного
-      ${{ github.token }} / ${{ secrets.GITHUB_TOKEN }} — создавать отдельный
+      github.token или secrets.GITHUB_TOKEN — создавать отдельный
       Personal Access Token не нужно.
     required: true
 
