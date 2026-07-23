@@ -15,7 +15,6 @@ inputs:
       ${{ github.token }} / ${{ secrets.GITHUB_TOKEN }} — создавать отдельный
       Personal Access Token не нужно.
     required: true
-    default: ${{ github.token }}
 
   gemini-api-key:
     description: >-
