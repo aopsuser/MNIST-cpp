@@ -74,12 +74,9 @@ runs:
 
     - name: Установить зависимости
       shell: bash
-      # ${{ github.action_path }} — папка, куда GitHub клонирует этот Action
-      # (не репозиторий пользователя), поэтому npm ci ставит зависимости
-      # именно самого Action, а не проекта, в который он встроен.
       run: |
         cd "${{ github.action_path }}"
-        npm ci --omit=dev
+        npm install --omit=dev
 
     - name: Запустить Zombie Branch Hunter
       shell: bash
