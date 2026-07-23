@@ -1,0 +1,34 @@
+name: Zombie Branch Hunter — еженедельный скан
+
+on:
+  schedule:
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (ничего не постить, только показать в логе)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  hunt-zombies:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout репозитория
+        uses: actions/checkout@v4
+
+      - name: Запустить Zombie Branch Hunter
+        uses: ./zombie-branch-hunter
+        with:
+          gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
+          inactive-days-threshold: '30'
+          dry-run: ${{ github.event.inputs.dry_run || 'false' }}
